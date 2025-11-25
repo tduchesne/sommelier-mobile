@@ -1,5 +1,6 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Vin {
@@ -7,15 +8,17 @@ interface Vin {
   nom: string;
   region: string;
   prix: number;
+  cepage?: string;
 }
 
 export default function HomeScreen() {
   const [vins, setVins] = useState<Vin[]>([]);
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     const fetchVins = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/vins');
+        const response = await fetch('http://10.0.0.225:8080/api/vins');
         if (!response.ok) {
           throw new Error('Erreur de connexion');
         }
@@ -29,6 +32,13 @@ export default function HomeScreen() {
     fetchVins();
   }, []);
 
+  const filteredVins = vins.filter((vin) => {
+    const searchLower = searchText.toLowerCase();
+    const nomMatch = vin.nom.toLowerCase().includes(searchLower);
+    const cepageMatch = vin.cepage?.toLowerCase().includes(searchLower) ?? false;
+    return nomMatch || cepageMatch;
+  });
+
   const renderItem = ({ item }: { item: Vin }) => (
     <View style={styles.card}>
       <Text style={styles.nom}>{item.nom}</Text>
@@ -40,8 +50,25 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>La Cave du Sommelier</Text>
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher (nom, cépage)..."
+          placeholderTextColor="#999"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={() => setSearchText('')}
+            activeOpacity={0.7}>
+            <MaterialIcons name="close" size={20} color="#666" />
+          </TouchableOpacity>
+        )}
+      </View>
       <FlatList
-        data={vins}
+        data={filteredVins}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
@@ -61,13 +88,32 @@ const styles = StyleSheet.create({
     padding: 20,
     textAlign: 'center',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
   list: {
     padding: 16,
     gap: 12,
   },
   card: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
@@ -76,8 +122,10 @@ const styles = StyleSheet.create({
       height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   nom: {
     fontSize: 18,
