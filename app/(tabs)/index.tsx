@@ -1,7 +1,10 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Constants from 'expo-constants';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://10.0.0.225:8080';
 
 interface Vin {
   id: string;
@@ -18,7 +21,7 @@ export default function HomeScreen() {
   useEffect(() => {
     const fetchVins = async () => {
       try {
-        const response = await fetch('http://10.0.0.225:8080/api/vins');
+        const response = await fetch(`${API_URL}/api/vins`);
         if (!response.ok) {
           throw new Error('Erreur de connexion');
         }
