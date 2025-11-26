@@ -1,5 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +28,7 @@ interface Vin {
 export default function HomeScreen() {
   const [vins, setVins] = useState<Vin[]>([]);
   const [searchText, setSearchText] = useState('');
+  const router = useRouter();
 
   const searchLower = searchText.trim().toLowerCase();
 
@@ -57,11 +59,18 @@ export default function HomeScreen() {
         });
 
   const renderItem = ({ item }: { item: Vin }) => (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.8}
+      onPress={() =>
+        router.push({ pathname: '/details/[id]', params: { id: item.id } } as any)
+      }
+      accessibilityRole="button"
+      accessibilityLabel={`Voir les détails de ${item.nom}`}>
       <Text style={styles.nom}>{item.nom}</Text>
       <Text style={styles.region}>{item.region}</Text>
       <Text style={styles.prix}>${item.prix}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
