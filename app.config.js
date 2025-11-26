@@ -13,7 +13,14 @@ export default {
       bundleIdentifier: 'com.vinotech.sommeliermobile',
       infoPlist: {
         NSAppTransportSecurity: {
-          NSAllowsArbitraryLoads: true,
+          // Only allow HTTP for specific development domains
+          // ATS remains enforced for all other domains
+          NSExceptionDomains: {
+            '10.0.0.225': {
+              NSExceptionAllowsInsecureHTTPLoads: true,
+              NSIncludesSubdomains: false,
+            },
+          },
         },
       },
     },
