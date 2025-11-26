@@ -4,8 +4,17 @@ import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_URL =
-  (Constants.expoConfig?.extra?.apiUrl as string) || (process.env.EXPO_PUBLIC_API_URL as string);
+const apiUrlFromConfig = Constants.expoConfig?.extra?.apiUrl as string | undefined;
+const apiUrlFromEnv = process.env.EXPO_PUBLIC_API_URL as string | undefined;
+const resolvedApiUrl = apiUrlFromConfig || apiUrlFromEnv;
+
+if (!resolvedApiUrl) {
+  throw new Error(
+    'API_URL not configured — set EXPO_PUBLIC_API_URL or expoConfig.extra.apiUrl in app.config.js'
+  );
+}
+
+const API_URL: string = resolvedApiUrl;
 
 interface Vin {
   id: string;
@@ -128,7 +137,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    // marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

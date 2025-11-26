@@ -9,9 +9,15 @@ if (!apiUrl) {
   process.exit(1);
 }
 
-if (!/^https:\/\//.test(apiUrl)) {
+try {
+  const url = new URL(apiUrl);
+
+  if (url.protocol !== 'https:' || !url.hostname) {
+    throw new Error('Invalid HTTPS URL');
+  }
+} catch {
   console.error(
-    `ERROR: EXPO_PUBLIC_API_URL must use HTTPS (received "${apiUrl}"). Set it to an https:// URL before building for production.`
+    `ERROR: EXPO_PUBLIC_API_URL must be a valid HTTPS URL (received "${apiUrl}"). Set it to an https:// URL before building for production.`
   );
   process.exit(1);
 }
