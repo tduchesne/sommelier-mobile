@@ -1,29 +1,13 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const apiUrlFromConfig = Constants.expoConfig?.extra?.apiUrl as string | undefined;
-const apiUrlFromEnv = process.env.EXPO_PUBLIC_API_URL as string | undefined;
-const resolvedApiUrl = apiUrlFromConfig || apiUrlFromEnv;
+import { getApiUrl } from '@/lib/apiConfig';
+import type { Vin } from '@/types/vin';
 
-if (!resolvedApiUrl) {
-  throw new Error(
-    'API_URL not configured — set EXPO_PUBLIC_API_URL or expoConfig.extra.apiUrl in app.config.js'
-  );
-}
-
-const API_URL: string = resolvedApiUrl;
-
-interface Vin {
-  id: string;
-  nom: string;
-  region: string;
-  prix: number;
-  cepage?: string;
-}
+const API_URL = getApiUrl();
 
 export default function HomeScreen() {
   const [vins, setVins] = useState<Vin[]>([]);

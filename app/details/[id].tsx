@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -10,26 +9,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type VinDetail = {
-  id: string;
-  nom: string;
-  region: string;
-  prix: number;
-  cepage?: string;
-  description?: string;
-};
+import { getApiUrl } from '@/lib/apiConfig';
+import type { VinDetail } from '@/types/vin';
 
-const apiUrlFromConfig = Constants.expoConfig?.extra?.apiUrl as string | undefined;
-const apiUrlFromEnv = process.env.EXPO_PUBLIC_API_URL as string | undefined;
-const resolvedApiUrl = apiUrlFromConfig || apiUrlFromEnv;
-
-if (!resolvedApiUrl) {
-  throw new Error(
-    'API_URL not configured — set EXPO_PUBLIC_API_URL or expoConfig.extra.apiUrl in app.config.js'
-  );
-}
-
-const API_URL: string = resolvedApiUrl;
+const API_URL = getApiUrl();
 
 export default function VinDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
