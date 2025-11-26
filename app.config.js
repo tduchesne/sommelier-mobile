@@ -1,3 +1,29 @@
+const isProdProfile =
+  process.env.EAS_BUILD_PROFILE === 'production' || process.env.NODE_ENV === 'production';
+
+// In development, we allow falling back to a local HTTP backend.
+// In production, EXPO_PUBLIC_API_URL is required and must be HTTPS.
+const resolveApiUrl = () => {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  if (isProdProfile) {
+    if (!envUrl) {
+      throw new Error(
+        'EXPO_PUBLIC_API_URL is required for production builds and must point to an HTTPS endpoint.'
+      );
+    }
+
+    if (!/^https:\/\//.test(envUrl)) {
+      throw new Error('EXPO_PUBLIC_API_URL must use HTTPS (e.g. https://api.example.com) in production.');
+    }
+
+    return envUrl;
+  }
+
+  // Development: use env if provided, otherwise fall back to the local HTTP backend.
+  return envUrl || 'http://10.0.0.225:8080';
+};
+
 export default {
   expo: {
     name: 'sommelier-mobile',
@@ -11,18 +37,21 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.vinotech.sommeliermobile',
-      infoPlist: {
-        NSAppTransportSecurity: {
-          // Only allow HTTP for specific development domains
-          // ATS remains enforced for all other domains
-          NSExceptionDomains: {
-            '10.0.0.225': {
-              NSExceptionAllowsInsecureHTTPLoads: true,
-              NSIncludesSubdomains: false,
+      // Only allow HTTP for the local backend when using the development build/profile.
+      ...(isProdProfile
+        ? {}
+        : {
+            infoPlist: {
+              NSAppTransportSecurity: {
+                NSExceptionDomains: {
+                  '10.0.0.225': {
+                    NSExceptionAllowsInsecureHTTPLoads: true,
+                    NSIncludesSubdomains: false,
+                  },
+                },
+              },
             },
-          },
-        },
-      },
+          }),
     },
     android: {
       adaptiveIcon: {
@@ -58,7 +87,7 @@ export default {
       reactCompiler: true,
     },
     extra: {
-      apiUrl: process.env.EXPO_PUBLIC_API_URL || 'http://10.0.0.225:8080',
+      apiUrl: resolveApiUrl(),
     },
   },
 };

@@ -25,15 +25,24 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Get a fresh project
+## API configuration & production safety
 
-When you're ready, run:
+- **Development**
+  - By default, the app will talk to a local backend at `http://10.0.0.225:8080`.
+  - On iOS, an App Transport Security (ATS) exception is only enabled for this local IP when using the **development** profile/build.
+- **Production**
+  - Set **`EXPO_PUBLIC_API_URL`** to a **HTTPS** endpoint (for example `https://api.example.com`) before running a production build.
+  - Production builds will fail if `EXPO_PUBLIC_API_URL` is missing or does not start with `https://`.
+  - You can run the same check locally or in CI with:
 
-```bash
-npm run reset-project
-```
+    ```bash
+    npm run check:prod-env
+    ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- **EAS build profiles**
+  - `eas.json` defines at least two build profiles:
+    - **development**: internal/dev builds with the ATS exception for the local backend.
+    - **production**: store builds without any ATS HTTP exception and requiring a secure HTTPS API URL.
 
 ## Learn more
 

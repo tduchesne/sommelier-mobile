@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://10.0.0.225:8080';
+const API_URL =
+  (Constants.expoConfig?.extra?.apiUrl as string) || (process.env.EXPO_PUBLIC_API_URL as string);
 
 interface Vin {
   id: string;
@@ -17,6 +18,8 @@ interface Vin {
 export default function HomeScreen() {
   const [vins, setVins] = useState<Vin[]>([]);
   const [searchText, setSearchText] = useState('');
+
+  const searchLower = searchText.trim().toLowerCase();
 
   useEffect(() => {
     const fetchVins = async () => {
@@ -35,12 +38,14 @@ export default function HomeScreen() {
     fetchVins();
   }, []);
 
-  const filteredVins = vins.filter((vin) => {
-    const searchLower = searchText.toLowerCase();
-    const nomMatch = vin.nom.toLowerCase().includes(searchLower);
-    const cepageMatch = vin.cepage?.toLowerCase().includes(searchLower) ?? false;
-    return nomMatch || cepageMatch;
-  });
+  const filteredVins =
+    searchLower.length === 0
+      ? vins
+      : vins.filter((vin) => {
+          const nom = vin.nom.toLowerCase();
+          const cepage = vin.cepage?.toLowerCase() ?? '';
+          return nom.includes(searchLower) || cepage.includes(searchLower);
+        });
 
   const renderItem = ({ item }: { item: Vin }) => (
     <View style={styles.card}>
@@ -60,12 +65,17 @@ export default function HomeScreen() {
           placeholderTextColor="#999"
           value={searchText}
           onChangeText={setSearchText}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
         />
         {searchText.length > 0 && (
           <TouchableOpacity
             style={styles.clearButton}
             onPress={() => setSearchText('')}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Effacer la recherche">
             <MaterialIcons name="close" size={20} color="#666" />
           </TouchableOpacity>
         )}
@@ -118,7 +128,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    // marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
