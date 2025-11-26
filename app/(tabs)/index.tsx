@@ -1,21 +1,39 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Constants from 'expo-constants';
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const apiUrlFromConfig = Constants.expoConfig?.extra?.apiUrl as string | undefined;
+const apiUrlFromEnv = process.env.EXPO_PUBLIC_API_URL as string | undefined;
+const resolvedApiUrl = apiUrlFromConfig || apiUrlFromEnv;
+
+if (!resolvedApiUrl) {
+  throw new Error(
+    'API_URL not configured — set EXPO_PUBLIC_API_URL or expoConfig.extra.apiUrl in app.config.js'
+  );
+}
+
+const API_URL: string = resolvedApiUrl;
 
 interface Vin {
   id: string;
   nom: string;
   region: string;
   prix: number;
+  cepage?: string;
 }
 
 export default function HomeScreen() {
   const [vins, setVins] = useState<Vin[]>([]);
+  const [searchText, setSearchText] = useState('');
+
+  const searchLower = searchText.trim().toLowerCase();
 
   useEffect(() => {
     const fetchVins = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/vins');
+        const response = await fetch(`${API_URL}/api/vins`);
         if (!response.ok) {
           throw new Error('Erreur de connexion');
         }
@@ -29,6 +47,15 @@ export default function HomeScreen() {
     fetchVins();
   }, []);
 
+  const filteredVins =
+    searchLower.length === 0
+      ? vins
+      : vins.filter((vin) => {
+          const nom = vin.nom.toLowerCase();
+          const cepage = vin.cepage?.toLowerCase() ?? '';
+          return nom.includes(searchLower) || cepage.includes(searchLower);
+        });
+
   const renderItem = ({ item }: { item: Vin }) => (
     <View style={styles.card}>
       <Text style={styles.nom}>{item.nom}</Text>
@@ -40,8 +67,30 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>La Cave du Sommelier</Text>
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher (nom, cépage)..."
+          placeholderTextColor="#999"
+          value={searchText}
+          onChangeText={setSearchText}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={() => setSearchText('')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Effacer la recherche">
+            <MaterialIcons name="close" size={20} color="#666" />
+          </TouchableOpacity>
+        )}
+      </View>
       <FlatList
-        data={vins}
+        data={filteredVins}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
@@ -61,23 +110,43 @@ const styles = StyleSheet.create({
     padding: 20,
     textAlign: 'center',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
   list: {
     padding: 16,
     gap: 12,
   },
   card: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   nom: {
     fontSize: 18,
