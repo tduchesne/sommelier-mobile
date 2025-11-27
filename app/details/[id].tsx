@@ -1,3 +1,4 @@
+import { VINS_ENDPOINT } from '@/config/api';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -9,10 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getApiUrl } from '@/lib/apiConfig';
 import type { VinDetail } from '@/types/vin';
-
-const API_URL = getApiUrl();
 
 export default function VinDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,7 +24,7 @@ export default function VinDetailScreen() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`${API_URL}/api/vins/${id}`);
+        const response = await fetch(`${VINS_ENDPOINT}/${id}`);
         if (!response.ok) {
           throw new Error('Erreur lors du chargement du vin');
         }
