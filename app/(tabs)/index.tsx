@@ -3,11 +3,9 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { getApiUrl } from '@/lib/apiConfig';
 import type { Vin } from '@/types/vin';
 
-const API_URL = getApiUrl();
+const API_URL = process.env.EXPO_PUBLIC_API_URL + '/vins';
 
 export default function HomeScreen() {
   const [vins, setVins] = useState<Vin[]>([]);
@@ -19,7 +17,7 @@ export default function HomeScreen() {
   useEffect(() => {
     const fetchVins = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/vins`);
+        const response = await fetch(API_URL);
         if (!response.ok) {
           throw new Error('Erreur de connexion');
         }
