@@ -83,7 +83,7 @@ export default function HomeScreen() {
       <FlatList
         data={filteredVins}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.list}
       />
     </SafeAreaView>

@@ -1,13 +1,12 @@
 export interface Vin {
-  id: string;
+  id: number;
   nom: string;
   region: string;
   prix: number;
   cepage?: string;
+  couleur?: string;
 }
 
 export interface VinDetail extends Vin {
-  description?: string;
+  notesDegustation?: string;
 }
-
-
