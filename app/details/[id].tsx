@@ -68,7 +68,7 @@ export default function VinDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.sectionText}>
-              {vin.description || "Aucune description n'est disponible pour ce vin."}
+              {vin.notesDegustation || "Aucune note de degustation n'est disponible pour ce vin."}
             </Text>
           </View>
         </ScrollView>
