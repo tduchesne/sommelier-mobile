@@ -66,7 +66,7 @@ export default function VinDetailScreen() {
           {vin.cepage && <Text style={styles.cepage}>Cépage : {vin.cepage}</Text>}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.sectionTitle}>Notes de degustation</Text>
             <Text style={styles.sectionText}>
               {vin.notesDegustation || "Aucune note de degustation n'est disponible pour ce vin."}
             </Text>
