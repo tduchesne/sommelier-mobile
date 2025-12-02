@@ -69,16 +69,27 @@ export default function MenuScreen() {
     });
   };
 
-  // Logique de filtrage d'exclusion
-  // Grâce à l'init sécurisée, 'plats' est garanti d'être un tableau (donc .filter existe)
-  const filteredPlats = plats.filter(plat => {
-    if (selectedAllergies.length === 0) return true;
-    if (!plat.allergenes) return true; // Pas d'infos = on affiche
 
-    // Si je coche "Gluten", je cache les plats qui contiennent "Gluten"
+  // Logique de filtrage d'exclusion améliorée (Tokenization)
+  const filteredPlats = plats.filter(plat => {
+    // 1. Si aucun filtre n'est actif, on garde tout
+    if (selectedAllergies.length === 0) return true;
+    
+    // 2. Si le plat n'a pas d'info allergène, on l'affiche (par défaut)
+    if (!plat.allergenes) return true; 
+
+    // 3. Découpage propre : On transforme "Soja, Gluten" en ["soja", "gluten"]
+    const dishAllergens = plat.allergenes
+      .toLowerCase()
+      .split(',') // On coupe aux virgules
+      .map(tag => tag.trim()); // On enlève les espaces autour (" Gluten" -> "gluten")
+
+    // 4. Vérification stricte
+    // On cache le plat SI un des filtres sélectionnés correspond EXACTEMENT à un des allergènes du plat
     const containsForbidden = selectedAllergies.some(filter => 
-      plat.allergenes?.toLowerCase().includes(filter.toLowerCase())
+      dishAllergens.includes(filter.toLowerCase())
     );
+
     return !containsForbidden;
   });
 
