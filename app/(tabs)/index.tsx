@@ -57,7 +57,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>La Cave du Sommelier</Text>
+      <Text style={styles.title}>Que Sera Syrah</Text>
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
@@ -100,6 +100,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     padding: 20,
     textAlign: 'center',
+    color: '#800020',
   },
   searchContainer: {
     flexDirection: 'row',
