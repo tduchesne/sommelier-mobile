@@ -57,11 +57,16 @@ export default function MenuScreen() {
   }, []);
 
   const toggleAllergy = (allergen: string) => {
-    if (selectedAllergies.includes(allergen)) {
-      setSelectedAllergies(selectedAllergies.filter(a => a !== allergen));
-    } else {
-      setSelectedAllergies([...selectedAllergies, allergen]);
-    }
+    setSelectedAllergies(prev => {
+      // "prev" représente l'état le plus récent, garanti par React
+      if (prev.includes(allergen)) {
+        // Si l'allergène y est, on l'enlève
+        return prev.filter(a => a !== allergen);
+      } else {
+        // Sinon, on l'ajoute
+        return [...prev, allergen];
+      }
+    });
   };
 
   // Logique de filtrage d'exclusion
