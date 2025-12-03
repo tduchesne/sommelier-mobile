@@ -8,8 +8,8 @@ import {
   ActivityIndicator, 
   ScrollView,
   TextInput,
-  Platform,
-  Keyboard
+  Keyboard,
+  useWindowDimensions 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -20,6 +20,8 @@ type Plat = {
   nom: string;
   ingredients: string; 
   allergenes: string | null;
+  allergenesModifiables: string | null;
+  optionRemplacement: string | null;
 };
 
 interface HeaderProps {
@@ -31,20 +33,26 @@ interface HeaderProps {
 
 // --- CONSTANTES ---
 const API_URL = process.env.EXPO_PUBLIC_API_URL + '/plats';
+const TABLET_BREAKPOINT = 700; // CodeRabbit suggestion
 
 const ALLERGENES_LIST = [
   "Gluten", "Produits laitiers", "Noix", "Oeufs", 
   "Soja", "Viande", "Poisson", "Fruits de mer", "Moutarde"
 ];
 
-// --- COMPOSANT HEADER (Défini à l'extérieur pour la stabilité du clavier) ---
+// --- HELPER (CodeRabbit suggestion) ---
+const parseTags = (tags: string | null): string[] => {
+  if (!tags) return [];
+  return tags.toLowerCase().split(',').map(tag => tag.trim());
+};
+
+// --- COMPOSANT HEADER ---
 const MenuHeader = ({ searchText, setSearchText, selectedAllergies, toggleAllergy }: HeaderProps) => (
   <View style={styles.headerContainer}>
     <View style={styles.headerTop}>
       <Text style={styles.title}>Menu Saison</Text>
     </View>
 
-    {/* Barre de Recherche */}
     <View style={styles.searchContainer}>
       <MaterialIcons name="search" size={24} color="#666" style={styles.searchIcon} />
       <TextInput
@@ -63,7 +71,7 @@ const MenuHeader = ({ searchText, setSearchText, selectedAllergies, toggleAllerg
       )}
     </View>
 
-    <Text style={styles.subtitle}>Filtrer par allergie (Exclusion) :</Text>
+    <Text style={styles.subtitle}>Filtrer par allergie (Exclusion intelligente) :</Text>
     
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
       {ALLERGENES_LIST.map((allergen) => {
@@ -87,10 +95,13 @@ const MenuHeader = ({ searchText, setSearchText, selectedAllergies, toggleAllerg
 
 // --- ECRAN PRINCIPAL ---
 export default function MenuScreen() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > TABLET_BREAKPOINT;
+  const numColumns = isTablet ? 2 : 1;
+
   const [plats, setPlats] = useState<Plat[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // State
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
   const [searchText, setSearchText] = useState('');
 
@@ -99,9 +110,21 @@ export default function MenuScreen() {
       try {
         const response = await fetch(API_URL);
         if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
-        const data = await response.json();
-        if (Array.isArray(data)) setPlats(data);
-        else setPlats([]); 
+        
+        const raw = await response.json(); // On récupère le JSON brut
+
+        // Mapping sécurisé (CodeRabbit Suggestion 1)
+        // Spring Boot envoie généralement du camelCase, mais on gère le snake_case au cas où.
+        const data = Array.isArray(raw)
+          ? raw.map((p: any) => ({
+              ...p,
+              // Priorité au camelCase, fallback sur snake_case, sinon null
+              allergenesModifiables: p.allergenesModifiables ?? p.allergenes_modifiables ?? null,
+              optionRemplacement: p.optionRemplacement ?? p.option_remplacement ?? null,
+            }))
+          : [];
+
+        setPlats(data);
       } catch (err) {
         console.error("Erreur API Plats:", err);
         setPlats([]);
@@ -118,8 +141,9 @@ export default function MenuScreen() {
     );
   };
 
+  // --- LOGIQUE DE FILTRAGE OPTIMISÉE ---
   const filteredPlats = plats.filter(plat => {
-    // 1. Filtre Recherche
+    // 1. Recherche Texte
     if (searchText.length > 0) {
       const query = searchText.toLowerCase();
       const matchNom = plat.nom.toLowerCase().includes(query);
@@ -131,26 +155,71 @@ export default function MenuScreen() {
     if (selectedAllergies.length === 0) return true;
     if (!plat.allergenes) return true; 
 
-    const dishAllergens = plat.allergenes.toLowerCase().split(',').map(tag => tag.trim());
-    const containsForbidden = selectedAllergies.some(filter => dishAllergens.includes(filter.toLowerCase()));
+    // Utilisation du Helper (CodeRabbit Suggestion 3)
+    const dishAllergens = parseTags(plat.allergenes);
+    const dishModifiables = parseTags(plat.allergenesModifiables);
 
-    return !containsForbidden;
+    const isStrictlyForbidden = selectedAllergies.some(filter => {
+      const filterLower = filter.toLowerCase();
+      // Interdit si contient l'allergène ET qu'il n'est pas modifiable
+      return dishAllergens.includes(filterLower) && !dishModifiables.includes(filterLower);
+    });
+
+    return !isStrictlyForbidden;
   });
 
-  const renderItem = ({ item }: { item: Plat }) => (
-    <View style={styles.card}>
-      <Text style={styles.nom}>{item.nom}</Text>
-      <Text style={styles.ingredients}>{item.ingredients}</Text>
-      
-      {item.allergenes ? (
-        <View style={styles.allergenContainer}>
-          <MaterialIcons name="info-outline" size={16} color="#d9534f" />
-          <Text style={styles.allergenLabel}> Contient : </Text>
-          <Text style={styles.allergenText}>{item.allergenes}</Text>
+  const renderItem = ({ item }: { item: Plat }) => {
+    // Helper aussi utilisé ici
+    const dishAllergens = parseTags(item.allergenes);
+    const activeWarnings = selectedAllergies.filter(filter => 
+        dishAllergens.includes(filter.toLowerCase())
+    );
+    const isModifiedDisplay = activeWarnings.length > 0;
+
+    return (
+      <View style={[
+          styles.card, 
+          isTablet && styles.cardTablet, 
+          isModifiedDisplay && styles.cardWarning 
+      ]}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.nom}>{item.nom}</Text>
+          {isModifiedDisplay && (
+             <View style={styles.badgeModif}>
+                 <MaterialIcons name="build" size={12} color="#FFF" />
+                 <Text style={styles.badgeModifText}>MODIF. REQUISE</Text>
+             </View>
+          )}
         </View>
-      ) : null}
-    </View>
-  );
+        
+        <Text style={styles.ingredients} numberOfLines={isTablet ? 4 : undefined}>
+            {item.ingredients}
+        </Text>
+        
+        {item.allergenes ? (
+          <View style={styles.allergenContainer}>
+            <MaterialIcons name="warning" size={16} color="#d9534f" />
+            <Text style={styles.allergenLabel}> Contient : </Text>
+            <Text style={styles.allergenText}>{item.allergenes}</Text>
+          </View>
+        ) : null}
+
+        {/* LOGIQUE OPTION: Si modif requise OU texte simple */}
+        {item.optionRemplacement && item.optionRemplacement !== "Aucune option de remplacement." ? (
+           <View style={[styles.optionContainer, isModifiedDisplay && styles.optionContainerHighlight]}>
+             <MaterialIcons 
+                 name={isModifiedDisplay ? "priority-high" : "check-circle-outline"} 
+                 size={16} 
+                 color={isModifiedDisplay ? "#d35400" : "#2e7d32"} 
+             />
+             <Text style={[styles.optionText, isModifiedDisplay && {color: '#d35400', fontWeight: 'bold'}]}>
+                 {item.optionRemplacement}
+             </Text>
+           </View>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -158,10 +227,12 @@ export default function MenuScreen() {
         <ActivityIndicator size="large" color="#800020" style={{marginTop: 50}}/>
       ) : (
         <FlatList
+          key={numColumns} 
           data={filteredPlats}
           renderItem={renderItem}
           keyExtractor={item => item.id.toString()}
-          // ON PASSE LE COMPOSANT HEADER ICI DIRECTEMENT
+          numColumns={numColumns}
+          columnWrapperStyle={isTablet ? styles.row : undefined}
           ListHeaderComponent={
             <MenuHeader 
               searchText={searchText}
@@ -188,27 +259,21 @@ export default function MenuScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   
-  // Header Styles
+  // Header
   headerContainer: { backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 16 },
   headerTop: { paddingHorizontal: 16, paddingTop: 16 },
   title: { fontSize: 26, fontWeight: 'bold', color: '#800020', marginBottom: 5 },
   subtitle: { fontSize: 14, color: '#666', marginBottom: 10, paddingHorizontal: 16, marginTop: 10 },
   
-  // Search Styles
+  // Search
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    marginHorizontal: 16,
-    paddingHorizontal: 10,
-    height: 44,
-    marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f0f0',
+    borderRadius: 8, marginHorizontal: 16, paddingHorizontal: 10, height: 44, marginTop: 8,
   },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 16, color: '#333', height: '100%' },
 
-  // Filters Styles
+  // Filters
   filters: { flexDirection: 'row', paddingHorizontal: 16 },
   chip: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
@@ -218,22 +283,43 @@ const styles = StyleSheet.create({
   chipText: { color: '#333', fontSize: 13 },
   chipTextSelected: { color: '#fff', fontWeight: 'bold' },
 
-  // List & Card Styles
+  // List & Grid
   listContent: { padding: 16 },
+  row: { justifyContent: 'space-between' }, 
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, elevation: 2,
-    borderLeftWidth: 4, borderLeftColor: '#800020'
+    borderLeftWidth: 4, borderLeftColor: '#800020',
   },
-  nom: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 6 },
+  cardTablet: {
+    flex: 1, marginHorizontal: 6, marginBottom: 16, maxWidth: '48%', 
+  },
+  cardWarning: {
+    borderLeftColor: '#e67e22',
+    backgroundColor: '#fffcf5'
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6},
+  badgeModif: {
+      flexDirection: 'row', alignItems: 'center', backgroundColor: '#e67e22', 
+      paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8
+  },
+  badgeModifText: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginLeft: 4},
+  nom: { fontSize: 18, fontWeight: 'bold', color: '#222', flex: 1 },
   ingredients: { fontSize: 14, color: '#555', lineHeight: 20, marginBottom: 12 },
   
   allergenContainer: { 
     flexDirection: 'row', flexWrap:'wrap', alignItems: 'center', 
-    backgroundColor: '#fff0f0', padding: 8, borderRadius: 6 
+    backgroundColor: '#fff0f0', padding: 8, borderRadius: 6, marginBottom: 4 
   },
   allergenLabel: { fontSize: 12, fontWeight: 'bold', color: '#d9534f' },
   allergenText: { fontSize: 12, color: '#c9302c', flex: 1 },
+
+  optionContainer: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#e8f5e9', padding: 8, borderRadius: 6, marginTop: 4
+  },
+  optionContainerHighlight: { backgroundColor: '#fcefe6' },
+  optionText: { fontSize: 12, color: '#1b5e20', flex: 1, marginLeft: 6 },
   
   emptyContainer: { alignItems: 'center', marginTop: 40 },
   empty: { textAlign: 'center', marginTop: 10, color: '#888', fontSize: 16 }
