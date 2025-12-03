@@ -92,6 +92,7 @@ export default function FilterModal({ visible, onClose, onApply, initialFilters 
       transparent={true}
       visible={visible}
       onRequestClose={onClose}
+      supportedOrientations={['portrait', 'landscape']}
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.overlay}>
