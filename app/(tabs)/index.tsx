@@ -39,7 +39,8 @@ export default function HomeScreen() {
       // Construction de l'URL
       let url = API_URL;
       const params = new URLSearchParams();
-
+      // Taille de la page
+      params.append('size', '500');
       // Si on a des filtres actifs, on utilise l'endpoint de recherche
       // Sinon on utilise l'endpoint standard (qui renvoie la liste complète)
       if (filters.couleur) params.append('couleur', filters.couleur);
