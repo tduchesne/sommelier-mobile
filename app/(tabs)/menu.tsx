@@ -1,16 +1,35 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, FlatList, TouchableOpacity, View, Text, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { 
+  StyleSheet, 
+  FlatList, 
+  TouchableOpacity, 
+  View, 
+  Text, 
+  ActivityIndicator, 
+  ScrollView,
+  TextInput,
+  Platform,
+  Keyboard
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
+// --- TYPES ---
 type Plat = {
   id: number;
   nom: string;
-  ingredients: string; // On utilise ingredients comme description
+  ingredients: string; 
   allergenes: string | null;
 };
 
-// L'URL propre (déjà configurée dans votre .env)
+interface HeaderProps {
+  searchText: string;
+  setSearchText: (text: string) => void;
+  selectedAllergies: string[];
+  toggleAllergy: (allergen: string) => void;
+}
+
+// --- CONSTANTES ---
 const API_URL = process.env.EXPO_PUBLIC_API_URL + '/plats';
 
 const ALLERGENES_LIST = [
@@ -18,104 +37,105 @@ const ALLERGENES_LIST = [
   "Soja", "Viande", "Poisson", "Fruits de mer", "Moutarde"
 ];
 
+// --- COMPOSANT HEADER (Défini à l'extérieur pour la stabilité du clavier) ---
+const MenuHeader = ({ searchText, setSearchText, selectedAllergies, toggleAllergy }: HeaderProps) => (
+  <View style={styles.headerContainer}>
+    <View style={styles.headerTop}>
+      <Text style={styles.title}>Menu Saison</Text>
+    </View>
+
+    {/* Barre de Recherche */}
+    <View style={styles.searchContainer}>
+      <MaterialIcons name="search" size={24} color="#666" style={styles.searchIcon} />
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Rechercher un plat, un ingrédient..."
+        value={searchText}
+        onChangeText={setSearchText}
+        placeholderTextColor="#999"
+        returnKeyType="search"
+        onSubmitEditing={Keyboard.dismiss}
+      />
+      {searchText.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchText('')}>
+            <MaterialIcons name="close" size={20} color="#666" />
+          </TouchableOpacity>
+      )}
+    </View>
+
+    <Text style={styles.subtitle}>Filtrer par allergie (Exclusion) :</Text>
+    
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
+      {ALLERGENES_LIST.map((allergen) => {
+        const isSelected = selectedAllergies.includes(allergen);
+        return (
+          <TouchableOpacity
+            key={allergen}
+            style={[styles.chip, isSelected && styles.chipSelected]}
+            onPress={() => toggleAllergy(allergen)}
+          >
+            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+              {allergen}
+            </Text>
+            {isSelected && <MaterialIcons name="close" size={14} color="#FFF" style={{marginLeft:4}}/>}
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  </View>
+);
+
+// --- ECRAN PRINCIPAL ---
 export default function MenuScreen() {
-  // 1. Initialisation sécurisée avec un tableau vide
   const [plats, setPlats] = useState<Plat[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // State pour les filtres : Ce que l'utilisateur veut ÉVITER
+  // State
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await fetch(API_URL);
-        
-        // 2. Vérifier si la réponse est OK (200)
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
         const data = await response.json();
-
-        // 3. Vérifier que c'est bien un tableau avant de le mettre dans le state
-        if (Array.isArray(data)) {
-          setPlats(data);
-        } else {
-          console.error("Format de données invalide reçue:", data);
-          setPlats([]); // On reste sur un tableau vide par sécurité
-        }
+        if (Array.isArray(data)) setPlats(data);
+        else setPlats([]); 
       } catch (err) {
         console.error("Erreur API Plats:", err);
-        setPlats([]); // En cas d'erreur, tableau vide = pas de crash
+        setPlats([]);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
   const toggleAllergy = (allergen: string) => {
-    setSelectedAllergies(prev => {
-      // "prev" représente l'état le plus récent, garanti par React
-      if (prev.includes(allergen)) {
-        // Si l'allergène y est, on l'enlève
-        return prev.filter(a => a !== allergen);
-      } else {
-        // Sinon, on l'ajoute
-        return [...prev, allergen];
-      }
-    });
+    setSelectedAllergies(prev => 
+      prev.includes(allergen) ? prev.filter(a => a !== allergen) : [...prev, allergen]
+    );
   };
 
-
-  // Logique de filtrage d'exclusion améliorée (Tokenization)
   const filteredPlats = plats.filter(plat => {
-    // 1. Si aucun filtre n'est actif, on garde tout
+    // 1. Filtre Recherche
+    if (searchText.length > 0) {
+      const query = searchText.toLowerCase();
+      const matchNom = plat.nom.toLowerCase().includes(query);
+      const matchIngr = plat.ingredients ? plat.ingredients.toLowerCase().includes(query) : false;
+      if (!matchNom && !matchIngr) return false;
+    }
+
+    // 2. Filtre Allergènes
     if (selectedAllergies.length === 0) return true;
-    
-    // 2. Si le plat n'a pas d'info allergène, on l'affiche (par défaut)
     if (!plat.allergenes) return true; 
 
-    // 3. Découpage propre : On transforme "Soja, Gluten" en ["soja", "gluten"]
-    const dishAllergens = plat.allergenes
-      .toLowerCase()
-      .split(',') // On coupe aux virgules
-      .map(tag => tag.trim()); // On enlève les espaces autour (" Gluten" -> "gluten")
-
-    // 4. Vérification stricte
-    // On cache le plat SI un des filtres sélectionnés correspond EXACTEMENT à un des allergènes du plat
-    const containsForbidden = selectedAllergies.some(filter => 
-      dishAllergens.includes(filter.toLowerCase())
-    );
+    const dishAllergens = plat.allergenes.toLowerCase().split(',').map(tag => tag.trim());
+    const containsForbidden = selectedAllergies.some(filter => dishAllergens.includes(filter.toLowerCase()));
 
     return !containsForbidden;
   });
-
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.title}>Menu Saison</Text>
-      <Text style={styles.subtitle}>Filtrer par allergie (Exclusion) :</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
-        {ALLERGENES_LIST.map((allergen) => {
-          const isSelected = selectedAllergies.includes(allergen);
-          return (
-            <TouchableOpacity
-              key={allergen}
-              style={[styles.chip, isSelected && styles.chipSelected]}
-              onPress={() => toggleAllergy(allergen)}
-            >
-              <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                {allergen}
-              </Text>
-              {isSelected && <MaterialIcons name="close" size={14} color="#FFF" style={{marginLeft:4}}/>}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
 
   const renderItem = ({ item }: { item: Plat }) => (
     <View style={styles.card}>
@@ -141,12 +161,22 @@ export default function MenuScreen() {
           data={filteredPlats}
           renderItem={renderItem}
           keyExtractor={item => item.id.toString()}
-          ListHeaderComponent={renderHeader}
+          // ON PASSE LE COMPOSANT HEADER ICI DIRECTEMENT
+          ListHeaderComponent={
+            <MenuHeader 
+              searchText={searchText}
+              setSearchText={setSearchText}
+              selectedAllergies={selectedAllergies}
+              toggleAllergy={toggleAllergy}
+            />
+          }
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled" 
+          keyboardDismissMode="on-drag"
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
                 <MaterialIcons name="no-food" size={40} color="#ccc" />
-                <Text style={styles.empty}>Aucun plat ne correspond à ces critères stricts.</Text>
+                <Text style={styles.empty}>Aucun plat trouvé.</Text>
             </View>
           }
         />
@@ -157,10 +187,29 @@ export default function MenuScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#eee' },
+  
+  // Header Styles
+  headerContainer: { backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 16 },
+  headerTop: { paddingHorizontal: 16, paddingTop: 16 },
   title: { fontSize: 26, fontWeight: 'bold', color: '#800020', marginBottom: 5 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 10 },
-  filters: { flexDirection: 'row' },
+  subtitle: { fontSize: 14, color: '#666', marginBottom: 10, paddingHorizontal: 16, marginTop: 10 },
+  
+  // Search Styles
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    marginHorizontal: 16,
+    paddingHorizontal: 10,
+    height: 44,
+    marginTop: 8,
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 16, color: '#333', height: '100%' },
+
+  // Filters Styles
+  filters: { flexDirection: 'row', paddingHorizontal: 16 },
   chip: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
     backgroundColor: '#eee', marginRight: 8, flexDirection: 'row', alignItems: 'center'
@@ -168,6 +217,8 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: '#d9534f' },
   chipText: { color: '#333', fontSize: 13 },
   chipTextSelected: { color: '#fff', fontWeight: 'bold' },
+
+  // List & Card Styles
   listContent: { padding: 16 },
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
@@ -176,12 +227,14 @@ const styles = StyleSheet.create({
   },
   nom: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 6 },
   ingredients: { fontSize: 14, color: '#555', lineHeight: 20, marginBottom: 12 },
+  
   allergenContainer: { 
     flexDirection: 'row', flexWrap:'wrap', alignItems: 'center', 
     backgroundColor: '#fff0f0', padding: 8, borderRadius: 6 
   },
   allergenLabel: { fontSize: 12, fontWeight: 'bold', color: '#d9534f' },
   allergenText: { fontSize: 12, color: '#c9302c', flex: 1 },
+  
   emptyContainer: { alignItems: 'center', marginTop: 40 },
   empty: { textAlign: 'center', marginTop: 10, color: '#888', fontSize: 16 }
 });
