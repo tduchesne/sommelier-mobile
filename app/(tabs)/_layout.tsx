@@ -19,14 +19,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Vins', // Changé de 'Home' à 'Vins'
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="wineglass.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="menu"
         options={{
-          title: 'Menu',
+          title: 'Plats', // Changé de 'Menu' à 'Plats'
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="fork.knife" color={color} />,
         }}
       />

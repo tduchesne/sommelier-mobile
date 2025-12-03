@@ -9,10 +9,12 @@ import {
   ScrollView,
   TextInput,
   Keyboard,
-  useWindowDimensions 
+  useWindowDimensions,
+  Appearance 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useColorScheme } from '@/hooks/use-color-scheme'; // Assure-toi que ce chemin est bon selon ton projet
 
 // --- TYPES ---
 type Plat = {
@@ -29,79 +31,119 @@ interface HeaderProps {
   setSearchText: (text: string) => void;
   selectedAllergies: string[];
   toggleAllergy: (allergen: string) => void;
+  isDark: boolean; // Nouveau prop pour le style
 }
 
-// --- CONSTANTES ---
+// --- CONSTANTES & THEME ---
 const API_URL = process.env.EXPO_PUBLIC_API_URL + '/plats';
-const TABLET_BREAKPOINT = 700; // CodeRabbit suggestion
+const TABLET_BREAKPOINT = 700;
 
 const ALLERGENES_LIST = [
   "Gluten", "Produits laitiers", "Noix", "Oeufs", 
   "Soja", "Viande", "Poisson", "Fruits de mer", "Moutarde"
 ];
 
-// --- HELPER (CodeRabbit suggestion) ---
+// Couleurs dynamiques
+const Colors = {
+  light: {
+    background: '#F2F2F7', // Gris iOS léger
+    card: '#FFFFFF',
+    text: '#000000',
+    subText: '#666666',
+    border: '#E5E5EA',
+    input: '#E5E5EA',
+    accent: '#800020',
+  },
+  dark: {
+    background: '#000000',
+    card: '#1C1C1E', // Gris sombre iOS
+    text: '#FFFFFF',
+    subText: '#AAAAAA',
+    border: '#38383A',
+    input: '#2C2C2E',
+    accent: '#FF4D6D', // Un bordeaux éclairci pour le dark mode
+  }
+};
+
+// --- HELPER ---
 const parseTags = (tags: string | null): string[] => {
   if (!tags) return [];
   return tags.toLowerCase().split(',').map(tag => tag.trim());
 };
 
 // --- COMPOSANT HEADER ---
-const MenuHeader = ({ searchText, setSearchText, selectedAllergies, toggleAllergy }: HeaderProps) => (
-  <View style={styles.headerContainer}>
-    <View style={styles.headerTop}>
-      <Text style={styles.title}>Menu Saison</Text>
-    </View>
+const MenuHeader = ({ searchText, setSearchText, selectedAllergies, toggleAllergy, isDark }: HeaderProps) => {
+  const theme = isDark ? Colors.dark : Colors.light;
 
-    <View style={styles.searchContainer}>
-      <MaterialIcons name="search" size={24} color="#666" style={styles.searchIcon} />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Rechercher un plat, un ingrédient..."
-        value={searchText}
-        onChangeText={setSearchText}
-        placeholderTextColor="#999"
-        returnKeyType="search"
-        onSubmitEditing={Keyboard.dismiss}
-      />
-      {searchText.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchText('')}>
-            <MaterialIcons name="close" size={20} color="#666" />
-          </TouchableOpacity>
-      )}
-    </View>
+  return (
+    // MODIFICATION ICI : On retire 'backgroundColor: theme.card' pour l'unifier avec le fond
+    <View style={[styles.headerContainer, { borderBottomColor: theme.border }]}>
+      <View style={styles.headerTop}>
+        <Text style={[styles.title, { color: theme.accent }]}>MENU SAISON</Text>
+        {/* MODIFICATION ICI : Sous-titre */}
+        <Text style={[styles.subtitle, { color: theme.subText }]}>Que Sera Syrah</Text>
+      </View>
 
-    <Text style={styles.subtitle}>Filtrer par allergie (Exclusion intelligente) :</Text>
-    
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
-      {ALLERGENES_LIST.map((allergen) => {
-        const isSelected = selectedAllergies.includes(allergen);
-        return (
-          <TouchableOpacity
-            key={allergen}
-            style={[styles.chip, isSelected && styles.chipSelected]}
-            onPress={() => toggleAllergy(allergen)}
-          >
-            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-              {allergen}
-            </Text>
-            {isSelected && <MaterialIcons name="close" size={14} color="#FFF" style={{marginLeft:4}}/>}
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  </View>
-);
+      {/* Barre de Recherche */}
+      <View style={[styles.searchContainer, { backgroundColor: theme.input }]}>
+        <MaterialIcons name="search" size={20} color={theme.subText} style={styles.searchIcon} />
+        <TextInput
+          style={[styles.searchInput, { color: theme.text }]}
+          placeholder="Rechercher un plat..."
+          placeholderTextColor={theme.subText}
+          value={searchText}
+          onChangeText={setSearchText}
+          returnKeyType="search"
+          onSubmitEditing={Keyboard.dismiss}
+        />
+        {searchText.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchText('')}>
+              <MaterialIcons name="close" size={20} color={theme.subText} />
+            </TouchableOpacity>
+        )}
+      </View>
+
+      <Text style={[styles.filterLabel, { color: theme.text }]}>Filtres d&apos;allergènes :</Text>
+      
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={{paddingRight: 16}}>
+        {ALLERGENES_LIST.map((allergen) => {
+          const isSelected = selectedAllergies.includes(allergen);
+          return (
+            <TouchableOpacity
+              key={allergen}
+              style={[
+                styles.chip, 
+                { backgroundColor: isSelected ? theme.accent : theme.input }
+              ]}
+              onPress={() => toggleAllergy(allergen)}
+            >
+              <Text style={[
+                styles.chipText, 
+                { color: isSelected ? '#FFF' : theme.text, fontWeight: isSelected ? 'bold' : 'normal' }
+              ]}>
+                {allergen}
+              </Text>
+              {isSelected && <MaterialIcons name="close" size={14} color="#FFF" style={{marginLeft:4}}/>}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
 
 // --- ECRAN PRINCIPAL ---
 export default function MenuScreen() {
   const { width } = useWindowDimensions();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = isDark ? Colors.dark : Colors.light;
+
   const isTablet = width > TABLET_BREAKPOINT;
   const numColumns = isTablet ? 2 : 1;
 
   const [plats, setPlats] = useState<Plat[]>([]);
   const [loading, setLoading] = useState(true);
-  
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
   const [searchText, setSearchText] = useState('');
 
@@ -109,24 +151,16 @@ export default function MenuScreen() {
     const fetchData = async () => {
       try {
         const response = await fetch(API_URL);
-        if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
-        
-        const raw = await response.json(); // On récupère le JSON brut
-
-        // Mapping sécurisé (CodeRabbit Suggestion 1)
-        // Spring Boot envoie généralement du camelCase, mais on gère le snake_case au cas où.
+        const raw = await response.json();
         const data = Array.isArray(raw)
           ? raw.map((p: any) => ({
               ...p,
-              // Priorité au camelCase, fallback sur snake_case, sinon null
               allergenesModifiables: p.allergenesModifiables ?? p.allergenes_modifiables ?? null,
               optionRemplacement: p.optionRemplacement ?? p.option_remplacement ?? null,
             }))
           : [];
-
         setPlats(data);
       } catch (err) {
-        console.error("Erreur API Plats:", err);
         setPlats([]);
       } finally {
         setLoading(false);
@@ -141,90 +175,85 @@ export default function MenuScreen() {
     );
   };
 
-  // --- LOGIQUE DE FILTRAGE OPTIMISÉE ---
   const filteredPlats = plats.filter(plat => {
-    // 1. Recherche Texte
     if (searchText.length > 0) {
       const query = searchText.toLowerCase();
-      const matchNom = plat.nom.toLowerCase().includes(query);
-      const matchIngr = plat.ingredients ? plat.ingredients.toLowerCase().includes(query) : false;
-      if (!matchNom && !matchIngr) return false;
+      if (!plat.nom.toLowerCase().includes(query) && !plat.ingredients.toLowerCase().includes(query)) return false;
     }
-
-    // 2. Filtre Allergènes
     if (selectedAllergies.length === 0) return true;
     if (!plat.allergenes) return true; 
 
-    // Utilisation du Helper (CodeRabbit Suggestion 3)
     const dishAllergens = parseTags(plat.allergenes);
     const dishModifiables = parseTags(plat.allergenesModifiables);
-
-    const isStrictlyForbidden = selectedAllergies.some(filter => {
-      const filterLower = filter.toLowerCase();
-      // Interdit si contient l'allergène ET qu'il n'est pas modifiable
-      return dishAllergens.includes(filterLower) && !dishModifiables.includes(filterLower);
-    });
-
-    return !isStrictlyForbidden;
+    return !selectedAllergies.some(filter => 
+      dishAllergens.includes(filter.toLowerCase()) && !dishModifiables.includes(filter.toLowerCase())
+    );
   });
 
   const renderItem = ({ item }: { item: Plat }) => {
-    // Helper aussi utilisé ici
     const dishAllergens = parseTags(item.allergenes);
-    const activeWarnings = selectedAllergies.filter(filter => 
-        dishAllergens.includes(filter.toLowerCase())
-    );
+    const activeWarnings = selectedAllergies.filter(filter => dishAllergens.includes(filter.toLowerCase()));
     const isModifiedDisplay = activeWarnings.length > 0;
 
     return (
       <View style={[
           styles.card, 
+          { backgroundColor: theme.card },
           isTablet && styles.cardTablet, 
-          isModifiedDisplay && styles.cardWarning 
+          isModifiedDisplay && { borderColor: '#E67E22', borderWidth: 1 } // Bordure subtile orange si warning
       ]}>
+        
+        {/* En-tête de Carte */}
         <View style={styles.cardHeader}>
-          <Text style={styles.nom}>{item.nom}</Text>
+          <Text style={[styles.nom, { color: theme.text }]}>{item.nom}</Text>
           {isModifiedDisplay && (
              <View style={styles.badgeModif}>
-                 <MaterialIcons name="build" size={12} color="#FFF" />
-                 <Text style={styles.badgeModifText}>MODIF. REQUISE</Text>
+                 <MaterialIcons name="build" size={10} color="#FFF" />
+                 <Text style={styles.badgeModifText}>MODIF.</Text>
              </View>
           )}
         </View>
         
-        <Text style={styles.ingredients} numberOfLines={isTablet ? 4 : undefined}>
+        <Text style={[styles.ingredients, { color: theme.subText }]} numberOfLines={isTablet ? 4 : undefined}>
             {item.ingredients}
         </Text>
         
-        {item.allergenes ? (
-          <View style={styles.allergenContainer}>
-            <MaterialIcons name="warning" size={16} color="#d9534f" />
-            <Text style={styles.allergenLabel}> Contient : </Text>
-            <Text style={styles.allergenText}>{item.allergenes}</Text>
-          </View>
-        ) : null}
+        {/* Zone Badges (Allergènes et Options) */}
+        <View style={styles.badgesArea}>
+          {item.allergenes ? (
+            <View style={styles.allergenBadge}>
+              <MaterialIcons name="warning" size={12} color="#D9534F" />
+              <Text style={styles.allergenText}>{item.allergenes}</Text>
+            </View>
+          ) : null}
 
-        {/* LOGIQUE OPTION: Si modif requise OU texte simple */}
-        {item.optionRemplacement && item.optionRemplacement !== "Aucune option de remplacement." ? (
-           <View style={[styles.optionContainer, isModifiedDisplay && styles.optionContainerHighlight]}>
-             <MaterialIcons 
-                 name={isModifiedDisplay ? "priority-high" : "check-circle-outline"} 
-                 size={16} 
-                 color={isModifiedDisplay ? "#d35400" : "#2e7d32"} 
-             />
-             <Text style={[styles.optionText, isModifiedDisplay && {color: '#d35400', fontWeight: 'bold'}]}>
-                 {item.optionRemplacement}
-             </Text>
-           </View>
-        ) : null}
+          {item.optionRemplacement && item.optionRemplacement !== "Aucune option de remplacement." ? (
+             <View style={[
+               styles.optionBadge, 
+               isModifiedDisplay ? { backgroundColor: '#FFF3E0' } : { backgroundColor: '#E8F5E9' }
+             ]}>
+               <MaterialIcons 
+                   name={isModifiedDisplay ? "priority-high" : "check"} 
+                   size={12} 
+                   color={isModifiedDisplay ? "#D35400" : "#2E7D32"} 
+               />
+               <Text style={[
+                 styles.optionText, 
+                 { color: isModifiedDisplay ? "#D35400" : "#2E7D32" }
+               ]}>
+                   {item.optionRemplacement}
+               </Text>
+             </View>
+          ) : null}
+        </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       {loading ? (
-        <ActivityIndicator size="large" color="#800020" style={{marginTop: 50}}/>
+        <ActivityIndicator size="large" color={theme.accent} style={{marginTop: 50}}/>
       ) : (
         <FlatList
           key={numColumns} 
@@ -239,6 +268,7 @@ export default function MenuScreen() {
               setSearchText={setSearchText}
               selectedAllergies={selectedAllergies}
               toggleAllergy={toggleAllergy}
+              isDark={isDark}
             />
           }
           contentContainerStyle={styles.listContent}
@@ -246,8 +276,8 @@ export default function MenuScreen() {
           keyboardDismissMode="on-drag"
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-                <MaterialIcons name="no-food" size={40} color="#ccc" />
-                <Text style={styles.empty}>Aucun plat trouvé.</Text>
+                <MaterialIcons name="restaurant" size={40} color={theme.subText} />
+                <Text style={[styles.empty, { color: theme.subText }]}>Aucun plat trouvé.</Text>
             </View>
           }
         />
@@ -257,70 +287,72 @@ export default function MenuScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  container: { flex: 1 },
   
-  // Header
-  headerContainer: { backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 16 },
-  headerTop: { paddingHorizontal: 16, paddingTop: 16 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#800020', marginBottom: 5 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 10, paddingHorizontal: 16, marginTop: 10 },
+  // Header Styles
+  headerContainer: { paddingBottom: 16, marginBottom: 10, borderBottomWidth: 1 },
+  headerTop: { paddingHorizontal: 16, paddingTop: 10, alignItems: 'center', marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  subtitle: { fontSize: 14, marginTop: 4, fontStyle: 'italic' },
   
   // Search
   searchContainer: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f0f0',
-    borderRadius: 8, marginHorizontal: 16, paddingHorizontal: 10, height: 44, marginTop: 8,
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 10, marginHorizontal: 16, paddingHorizontal: 12, height: 40, marginBottom: 16,
   },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 16, color: '#333', height: '100%' },
+  searchInput: { flex: 1, fontSize: 16, height: '100%' },
 
-  // Filters
-  filters: { flexDirection: 'row', paddingHorizontal: 16 },
+  filterLabel: { marginLeft: 16, marginBottom: 8, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
+  filters: { paddingLeft: 16 },
   chip: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-    backgroundColor: '#eee', marginRight: 8, flexDirection: 'row', alignItems: 'center'
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    marginRight: 8, flexDirection: 'row', alignItems: 'center'
   },
-  chipSelected: { backgroundColor: '#d9534f' },
-  chipText: { color: '#333', fontSize: 13 },
-  chipTextSelected: { color: '#fff', fontWeight: 'bold' },
+  chipText: { fontSize: 13 },
 
   // List & Grid
-  listContent: { padding: 16 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 30 },
   row: { justifyContent: 'space-between' }, 
+  
+  // CARD DESIGN MODERNE
   card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, elevation: 2,
-    borderLeftWidth: 4, borderLeftColor: '#800020',
+    borderRadius: 16, padding: 16, marginBottom: 16,
+    // Ombre douce iOS/Android
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardTablet: {
-    flex: 1, marginHorizontal: 6, marginBottom: 16, maxWidth: '48%', 
-  },
-  cardWarning: {
-    borderLeftColor: '#e67e22',
-    backgroundColor: '#fffcf5'
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6},
-  badgeModif: {
-      flexDirection: 'row', alignItems: 'center', backgroundColor: '#e67e22', 
-      paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8
-  },
-  badgeModifText: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginLeft: 4},
-  nom: { fontSize: 18, fontWeight: 'bold', color: '#222', flex: 1 },
-  ingredients: { fontSize: 14, color: '#555', lineHeight: 20, marginBottom: 12 },
+  cardTablet: { flex: 1, marginHorizontal: 8, maxWidth: '48%' },
   
-  allergenContainer: { 
-    flexDirection: 'row', flexWrap:'wrap', alignItems: 'center', 
-    backgroundColor: '#fff0f0', padding: 8, borderRadius: 6, marginBottom: 4 
-  },
-  allergenLabel: { fontSize: 12, fontWeight: 'bold', color: '#d9534f' },
-  allergenText: { fontSize: 12, color: '#c9302c', flex: 1 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
+  nom: { fontSize: 17, fontWeight: '700', flex: 1 },
+  ingredients: { fontSize: 14, lineHeight: 20, marginBottom: 16 },
 
-  optionContainer: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#e8f5e9', padding: 8, borderRadius: 6, marginTop: 4
-  },
-  optionContainerHighlight: { backgroundColor: '#fcefe6' },
-  optionText: { fontSize: 12, color: '#1b5e20', flex: 1, marginLeft: 6 },
+  // BADGES (Pills)
+  badgesArea: { gap: 8 },
   
-  emptyContainer: { alignItems: 'center', marginTop: 40 },
-  empty: { textAlign: 'center', marginTop: 10, color: '#888', fontSize: 16 }
+  allergenBadge: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+    backgroundColor: '#FEF2F2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6
+  },
+  allergenText: { fontSize: 11, color: '#D9534F', marginLeft: 4, fontWeight: '500' },
+
+  optionBadge: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6
+  },
+  optionText: { fontSize: 11, marginLeft: 4, fontWeight: '600', flexShrink: 1 },
+
+  // Modif Warning Tag
+  badgeModif: {
+      flexDirection: 'row', alignItems: 'center', backgroundColor: '#E67E22', 
+      paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12, marginLeft: 8
+  },
+  badgeModifText: { color: '#fff', fontSize: 9, fontWeight: 'bold', marginLeft: 3 },
+  
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
+  empty: { textAlign: 'center', marginTop: 10, fontSize: 16 }
 });

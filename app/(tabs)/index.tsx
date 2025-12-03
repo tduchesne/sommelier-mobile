@@ -1,57 +1,134 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState, useCallback } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo } from 'react'; // React importé ici
+import { 
+  FlatList, 
+  StyleSheet, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  View, 
+  ActivityIndicator, 
+  useWindowDimensions,
+  Keyboard 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { Vin } from '@/types/vin';
-import FilterModal, { FilterState } from '@/components/FilterModal'; // <--- IMPORT
+import FilterModal, { FilterState } from '@/components/FilterModal';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Gestion de l'URL
+// --- CONSTANTES & THEME ---
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 if (!BASE_URL) throw new Error("EXPO_PUBLIC_API_URL manquante");
 const API_URL = `${BASE_URL.replace(/\/$/, '')}/vins`;
+const TABLET_BREAKPOINT = 700;
 
-// Couleurs (inchangé)
-const COLORS = {
+const COLORS_VIN = {
   ROUGE: '#800020', BLANC: '#F2C94C', ROSE: '#F48FB1',
-  EFFERVESCENT: '#56CCF2', ORANGE: '#F2994A', LIQUOREUX: '#BB6BD9', DEFAULT: '#ccc'
+  EFFERVESCENT: '#56CCF2', ORANGE: '#F2994A', LIQUOREUX: '#BB6BD9', DEFAULT: '#999'
 };
-const getWineColor = (c: string | undefined) => COLORS[c as keyof typeof COLORS] || COLORS.DEFAULT;
 
+const getWineColor = (c: string | undefined) => COLORS_VIN[c as keyof typeof COLORS_VIN] || COLORS_VIN.DEFAULT;
+
+const ThemeColors = {
+  light: {
+    background: '#F2F2F7',
+    card: '#FFFFFF',
+    text: '#000000',
+    subText: '#666666',
+    border: '#E5E5EA',
+    input: '#E5E5EA',
+    accent: '#800020',
+  },
+  dark: {
+    background: '#000000',
+    card: '#1C1C1E',
+    text: '#FFFFFF',
+    subText: '#AAAAAA',
+    border: '#38383A',
+    input: '#2C2C2E',
+    accent: '#FF4D6D',
+  }
+};
+
+// --- COMPOSANT CARTE OPTIMISÉ (Memoized) ---
+// 1. On définit le composant avec un nom pour éviter l'erreur "missing display name"
+const WineCardItem = ({ item, isTablet, theme, onPress }: { item: Vin, isTablet: boolean, theme: any, onPress: () => void }) => {
+  const accentColor = getWineColor(item.couleur);
+  
+  return (
+    <TouchableOpacity
+      style={[
+        styles.card, 
+        { backgroundColor: theme.card },
+        isTablet && styles.cardTablet
+      ]}
+      activeOpacity={0.7}
+      onPress={onPress}
+    >
+      <View style={styles.cardHeader}>
+        <View style={{flex: 1}}>
+          <Text style={[styles.nom, { color: theme.text }]} numberOfLines={1}>{item.nom}</Text>
+          <Text style={[styles.region, { color: theme.subText }]} numberOfLines={1}>{item.region}</Text>
+        </View>
+        <Text style={[styles.prix, { color: theme.accent }]}>${item.prix}</Text>
+      </View>
+
+      <View style={styles.cardFooter}>
+        {item.couleur && (
+          <View style={[styles.badge, { backgroundColor: accentColor + '20' }]}> 
+            <View style={[styles.dot, { backgroundColor: accentColor }]} />
+            <Text style={[styles.badgeText, { color: accentColor }]}>{item.couleur}</Text>
+          </View>
+        )}
+        
+        {item.cepage && (
+           <Text style={[styles.cepage, { color: theme.subText }]} numberOfLines={1}>
+             {item.cepage}
+           </Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// 2. On l'exporte en memo
+const WineCard = React.memo(WineCardItem);
+
+// --- ECRAN PRINCIPAL ---
 export default function HomeScreen() {
+  const { width } = useWindowDimensions();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = isDark ? ThemeColors.dark : ThemeColors.light;
+  
+  const isTablet = width > TABLET_BREAKPOINT;
+  const numColumns = isTablet ? 2 : 1;
+
   const [vins, setVins] = useState<Vin[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Recherche texte (Client-side)
   const [searchText, setSearchText] = useState('');
   
-  // Filtres avancés (Server-side)
   const [modalVisible, setModalVisible] = useState(false);
   const [filters, setFilters] = useState<FilterState>({ couleur: null, minPrix: '', maxPrix: '', region: '' });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
   const router = useRouter();
 
-  // Fonction pour charger les vins (Standard ou Recherche)
   const fetchVins = useCallback(async () => {
     setLoading(true);
     try {
-      // Construction de l'URL
       let url = API_URL;
       const params = new URLSearchParams();
-      // Taille de la page
-      params.append('size', '500');
-      // Si on a des filtres actifs, on utilise l'endpoint de recherche
-      // Sinon on utilise l'endpoint standard (qui renvoie la liste complète)
+      params.append('size', '500'); 
+      
       if (filters.couleur) params.append('couleur', filters.couleur);
       if (filters.minPrix) params.append('minPrix', filters.minPrix);
       if (filters.maxPrix) params.append('maxPrix', filters.maxPrix);
       if (filters.region) params.append('region', filters.region);
 
-      // On détecte si on doit utiliser le mode recherche
-      const isSearching = params.toString().length > 0;
-      
-      if (isSearching) {
+      if (params.toString().length > 0) {
         url = `${API_URL}/search?${params.toString()}`;
       }
 
@@ -60,18 +137,13 @@ export default function HomeScreen() {
       
       const data = await response.json();
       
-      // Gestion Pagination vs Liste simple
-      // Le nouvel endpoint /search retourne { content: [...] }
-      // L'ancien /vins retourne [...] (sauf si vous l'avez migré aussi)
       let listeVins = [];
       if (Array.isArray(data)) {
         listeVins = data;
       } else if (data.content && Array.isArray(data.content)) {
         listeVins = data.content;
       }
-
       setVins(listeVins);
-
     } catch (error) {
       console.log('Erreur:', error);
       setVins([]);
@@ -80,81 +152,68 @@ export default function HomeScreen() {
     }
   }, [filters]);
 
-  // Recharger quand les filtres changent
   useEffect(() => {
     fetchVins();
-    
-    // Calculer combien de filtres sont actifs pour le badge
     let count = 0;
     if (filters.couleur) count++;
     if (filters.minPrix) count++;
     if (filters.maxPrix) count++;
     if (filters.region) count++;
     setActiveFiltersCount(count);
-
   }, [filters]);
 
-  // Filtrage local par texte (Nom/Cépage)
-  const filteredVins = vins.filter((vin) => {
+  const filteredVins = useMemo(() => {
     const searchLower = searchText.trim().toLowerCase();
-    if (searchLower === '') return true;
-    const nom = vin.nom.toLowerCase();
-    const cepage = vin.cepage?.toLowerCase() ?? '';
-    return nom.includes(searchLower) || cepage.includes(searchLower);
-  });
+    if (searchLower === '') return vins;
+    return vins.filter((vin) => {
+      const nom = vin.nom.toLowerCase();
+      const cepage = vin.cepage?.toLowerCase() ?? '';
+      return nom.includes(searchLower) || cepage.includes(searchLower);
+    });
+  }, [vins, searchText]);
 
-  const renderItem = ({ item }: { item: Vin }) => {
-    const accentColor = getWineColor(item.couleur);
-    return (
-      <TouchableOpacity
-        style={[styles.card, { borderLeftColor: accentColor }]}
-        activeOpacity={0.7}
-        onPress={() => router.push({ pathname: '/details/[id]', params: { id: item.id } } as any)}
-      >
-        <View style={styles.cardHeader}>
-          <Text style={styles.nom} numberOfLines={1}>{item.nom}</Text>
-          <Text style={styles.prix}>${item.prix}</Text>
-        </View>
-        <View style={styles.cardSubHeader}>
-          {item.couleur && (
-            <View style={[styles.badge, { backgroundColor: accentColor + '20' }]}> 
-              <Text style={[styles.badgeText, { color: accentColor }]}>{item.couleur}</Text>
-            </View>
-          )}
-          <Text style={styles.region} numberOfLines={1}>{item.region}</Text>
-        </View>
-        {item.cepage && <Text style={styles.cepage} numberOfLines={1}>{item.cepage}</Text>}
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = useCallback(({ item }: { item: Vin }) => (
+    <WineCard 
+      item={item} 
+      isTablet={isTablet} 
+      theme={theme}
+      onPress={() => router.push({ pathname: '/details/[id]', params: { id: item.id } } as any)}
+    />
+  ), [isTablet, theme, router]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Carte des Vins</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
+      
+      <View style={[styles.headerContainer, { borderBottomColor: theme.border }]}>
+        <Text style={[styles.title, { color: theme.accent }]}>CARTE DES VINS</Text>
+        <Text style={[styles.subtitle, { color: theme.subText }]}>Que Sera Syrah</Text>
+      </View>
       
       <View style={styles.toolbar}>
-        {/* Barre de recherche */}
-        <View style={styles.searchContainer}>
-          <MaterialIcons name="search" size={20} color="#999" style={styles.searchIcon}/>
+        <View style={[styles.searchContainer, { backgroundColor: theme.input }]}>
+          <MaterialIcons name="search" size={20} color={theme.subText} style={styles.searchIcon}/>
           <TextInput
-            style={styles.searchInput}
-            placeholder="Rechercher (nom)..."
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Rechercher (nom, cépage)..."
+            placeholderTextColor={theme.subText}
             value={searchText}
             onChangeText={setSearchText}
           />
           {searchText.length > 0 && (
             <TouchableOpacity onPress={() => setSearchText('')}>
-              <MaterialIcons name="close" size={20} color="#666" />
+              <MaterialIcons name="close" size={20} color={theme.subText} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Bouton Filtres */}
         <TouchableOpacity 
-          style={[styles.filterButton, activeFiltersCount > 0 && styles.filterButtonActive]} 
+          style={[
+            styles.filterButton, 
+            { backgroundColor: activeFiltersCount > 0 ? theme.accent : theme.input }
+          ]} 
           onPress={() => setModalVisible(true)}
         >
-          <MaterialIcons name="filter-list" size={24} color={activeFiltersCount > 0 ? "white" : "#800020"} />
+          <MaterialIcons name="tune" size={24} color={activeFiltersCount > 0 ? "white" : theme.text} />
           {activeFiltersCount > 0 && (
             <View style={styles.badgeCount}>
               <Text style={styles.badgeCountText}>{activeFiltersCount}</Text>
@@ -163,20 +222,27 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Liste */}
       {loading ? (
-        <ActivityIndicator size="large" color="#800020" style={{marginTop: 50}} />
+        <ActivityIndicator size="large" color={theme.accent} style={{marginTop: 50}} />
       ) : (
         <FlatList
+          key={numColumns}
           data={filteredVins}
           renderItem={renderItem}
           keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.empty}>Aucun vin trouvé.</Text>}
+          contentContainerStyle={styles.listContent}
+          numColumns={numColumns}
+          columnWrapperStyle={isTablet ? styles.row : undefined}
+          initialNumToRender={10} 
+          maxToRenderPerBatch={10} 
+          windowSize={5} 
+          removeClippedSubviews={true} 
+          ListEmptyComponent={
+            <Text style={[styles.empty, { color: theme.subText }]}>Aucun vin trouvé.</Text>
+          }
         />
       )}
 
-      {/* Modale */}
       <FilterModal 
         visible={modalVisible} 
         onClose={() => setModalVisible(false)} 
@@ -188,41 +254,49 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  title: { fontSize: 28, fontWeight: 'bold', padding: 16, textAlign: 'center', color: '#800020' },
+  container: { flex: 1 },
+  headerContainer: { paddingBottom: 16, marginBottom: 10, borderBottomWidth: 1, alignItems: 'center', paddingTop: 10 },
+  title: { fontSize: 24, fontWeight: '700', letterSpacing: 0.5 },
+  subtitle: { fontSize: 14, marginTop: 4, fontStyle: 'italic' },
   toolbar: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 10, gap: 10 },
   searchContainer: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-    borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#eee', height: 50
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    borderRadius: 10, paddingHorizontal: 12, height: 44
   },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 16, color: '#333' },
-  
-  // Bouton Filtre
+  searchInput: { flex: 1, fontSize: 16, height: '100%' },
   filterButton: {
-    width: 50, height: 50, borderRadius: 12, backgroundColor: '#fff',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#eee'
+    width: 44, height: 44, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center'
   },
-  filterButtonActive: { backgroundColor: '#800020', borderColor: '#800020' },
   badgeCount: {
     position: 'absolute', top: -5, right: -5, backgroundColor: 'red',
-    borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center'
+    borderRadius: 10, width: 18, height: 18, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: '#fff'
   },
-  badgeCountText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-
-  // Liste (inchangé)
-  list: { padding: 16, gap: 12 },
+  badgeCountText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
+  listContent: { padding: 16, paddingBottom: 40 },
+  row: { justifyContent: 'space-between' },
   card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, borderLeftWidth: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, elevation: 3
+    borderRadius: 16, padding: 16, marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  cardSubHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  nom: { fontSize: 17, fontWeight: 'bold', color: '#222', flex: 1, marginRight: 8 },
-  prix: { fontSize: 16, fontWeight: '700', color: '#800020' },
-  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginRight: 8 },
-  badgeText: { fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' },
-  region: { fontSize: 14, color: '#666', flex: 1 },
-  cepage: { fontSize: 13, color: '#888', fontStyle: 'italic' },
-  empty: { textAlign: 'center', marginTop: 40, color: '#999', fontSize: 16 }
+  cardTablet: { flex: 1, marginHorizontal: 6, marginBottom: 16, maxWidth: '48%' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  nom: { fontSize: 17, fontWeight: '700', marginBottom: 2 },
+  region: { fontSize: 13 },
+  prix: { fontSize: 17, fontWeight: '700', marginLeft: 8 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  badge: { 
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 8 
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  badgeText: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
+  cepage: { fontSize: 13, fontStyle: 'italic', flex: 1 },
+  empty: { textAlign: 'center', marginTop: 60, fontSize: 16 }
 });

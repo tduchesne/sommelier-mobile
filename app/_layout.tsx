@@ -2,8 +2,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect } from 'react'; // 1. AJOUT DE L'IMPORT REACT
-import * as ScreenOrientation from 'expo-screen-orientation'; // 2. AJOUT DE L'IMPORT ORIENTATION
+import { useEffect } from 'react';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -13,8 +13,8 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark'; // Pour la couleur de la flèche
 
-  // 3. AJOUT DU USE_EFFECT POUR DÉVERROUILLER L'ÉCRAN
   useEffect(() => {
     async function unlockOrientation() {
       await ScreenOrientation.unlockAsync();
@@ -23,10 +23,21 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Accueil' }} />
-        <Stack.Screen name="details/[id]" options={{ title: 'Détails du vin' }} />
+        
+        {/* CORRECTION ICI : On définit le style transparent dès l'initialisation */}
+        <Stack.Screen 
+          name="details/[id]" 
+          options={{ 
+            headerTitle: '',             // Pas de titre
+            headerTransparent: true,     // Fond transparent immédiat
+            headerBackTitle: '', // Pas de texte "Retour"
+            headerTintColor: isDark ? '#FFFFFF' : '#000000', // Couleur flèche adaptée
+          }} 
+        />
+        
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
