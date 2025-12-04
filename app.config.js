@@ -88,7 +88,16 @@ export default {
     },
     extra: {
       apiUrl: resolveApiUrl(),
+      eas: {
+        projectId: 'a44c86a8-ad6b-476c-8278-95ef5acfce9a',
+      },
     },
+    "updates": {
+    "url": "https://u.expo.dev/a44c86a8-ad6b-476c-8278-95ef5acfce9a"
+  },
+  "runtimeVersion": {
+    "policy": "appVersion"
+  }
   },
 };
 
