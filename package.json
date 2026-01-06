@@ -13,6 +13,7 @@
     "deploy": "eas update --branch production --message 'Update'"
   },
   "dependencies": {
+    "@clerk/clerk-expo": "^2.19.12",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
@@ -25,6 +26,7 @@
     "expo-linking": "~8.0.9",
     "expo-router": "~6.0.15",
     "expo-screen-orientation": "~9.0.7",
+    "expo-secure-store": "^15.0.8",
     "expo-splash-screen": "~31.0.11",
     "expo-status-bar": "~3.0.8",
     "expo-symbols": "~1.0.7",
