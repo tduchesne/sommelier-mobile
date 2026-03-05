@@ -1,3 +1,4 @@
+import { useAuth } from '@clerk/clerk-expo';
 import React, { useEffect, useState } from 'react';
 import { 
   StyleSheet, 
@@ -195,6 +196,7 @@ export default function MenuScreen() {
   const isTablet = width > TABLET_BREAKPOINT;
   const numColumns = isTablet ? 2 : 1;
 
+  const { getToken } = useAuth();
   const [plats, setPlats] = useState<Plat[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -206,7 +208,10 @@ export default function MenuScreen() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(API_URL);
+        const token = await getToken({ template: 'default', skipCache: true });
+        const response = await fetch(API_URL, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
         const raw = await response.json();
         const data = Array.isArray(raw)
           ? raw.map((p: any) => ({

@@ -11,6 +11,7 @@ import {
   Platform 
 } from 'react-native';
 import { useSignIn } from '@clerk/clerk-expo';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -23,6 +24,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSignInPress = async () => {
     if (!isLoaded) return;
@@ -106,14 +108,23 @@ export default function LoginScreen() {
 
         <View style={styles.inputContainer}>
           <Text style={[styles.label, { color: textColor }]}>Mot de passe</Text>
-          <TextInput
-            value={password}
-            placeholder="••••••••"
-            placeholderTextColor={placeholderColor}
-            secureTextEntry={true}
-            onChangeText={setPassword}
-            style={[styles.input, { backgroundColor: inputBg, color: textColor }]}
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TextInput
+              value={password}
+              placeholder="••••••••"
+              placeholderTextColor={placeholderColor}
+              secureTextEntry={!showPassword}
+              onChangeText={setPassword}
+              textContentType="password"
+              style={[styles.input, { flex: 1, backgroundColor: inputBg, color: textColor }]}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(v => !v)}
+              style={{ position: 'absolute', right: 15 }}
+            >
+              <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color={placeholderColor} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity 

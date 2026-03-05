@@ -1,7 +1,7 @@
 import FilterModal, { FilterState } from '@/components/FilterModal';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { Vin } from '@/types/vin';
-import { useAuth, useOrganizationList, useSession, useUser } from '@clerk/clerk-expo';
+import { useAuth, useClerk, useOrganizationList, useSession, useUser } from '@clerk/clerk-expo';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -84,10 +84,10 @@ export default function HomeScreen() {
   const numColumns = isTablet ? 2 : 1;
 
   // --- SÉCURITÉ CLERK ---
-  const { getToken, signOut, isSignedIn, isLoaded } = useAuth(); 
+  const { getToken, signOut, isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
   const { session } = useSession();
-  const { setActive } = useOrganizationList();
+  const clerk = useClerk();
 
   const [vins, setVins] = useState<Vin[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,22 +95,16 @@ export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [filters, setFilters] = useState<FilterState>({ couleur: null, minPrix: '', maxPrix: '', region: '' });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [isOrgReady, setIsOrgReady] = useState(false);
 
   const router = useRouter();
 
   const fetchVins = useCallback(async () => {
-    if (!isSignedIn) return; 
-
-    // Sécurité supplémentaire : si pas d'org active, on attend
-    if (!session?.lastActiveOrganizationId) {
-        console.log("⏳ Attente de l'activation de l'organisation...");
-        return;
-    }
+    if (!isSignedIn || !isOrgReady) return;
 
     setLoading(true);
     try {
-      // Force a fresh token so org_id is included after setActive
-      const token = await getToken({ skipCache: true });
+      const token = await getToken({ template: 'default', skipCache: true });
 
       let url = API_URL;
       const params = new URLSearchParams();
@@ -153,32 +147,18 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [filters, getToken, isSignedIn, session?.lastActiveOrganizationId]); // Dépendance critique ajoutée
-  
-  // --- EFFET DE GESTION DE SESSION (Correction Race Condition) ---
+  }, [filters, getToken, isSignedIn, isOrgReady]);
+
+  // --- EFFET DE GESTION DE SESSION ---
   useEffect(() => {
+      if (!isLoaded || !isSignedIn || !user || !session) return;
+
       async function handleSessionInit() {
-          if (!isLoaded || !isSignedIn || !user || !session) return;
-
-          // 1. Vérifier si une organisation est déjà active
-          if (session.lastActiveOrganizationId) {
-              // Tout est bon, on peut charger les données
-              // (Le fetch sera déclenché par l'autre useEffect ou manuellement, 
-              // mais ici on s'assure juste que l'état est sain)
-              return;
-          }
-
-          // 2. Si aucune organisation active, on l'active
           if (user.organizationMemberships && user.organizationMemberships.length > 0) {
               const targetOrgId = user.organizationMemberships[0].organization.id;
-              console.log("🔄 Activation forcée de l'organisation:", targetOrgId);
-              
               try {
-                if (setActive) {
-                  await setActive({ organization: targetOrgId });
-                  // Une fois activé, Clerk va mettre à jour l'objet 'session'.
-                  // Cela déclenchera un re-render, et le fetchVins pourra passer.
-                }
+                await clerk.setActive({ session: session?.id, organization: targetOrgId });
+                setIsOrgReady(true);
               } catch (err) {
                   console.error("Erreur activation org:", err);
                   Alert.alert("Erreur", "Impossible d'activer le restaurant.");
@@ -190,24 +170,26 @@ export default function HomeScreen() {
       }
 
       handleSessionInit();
-  }, [isLoaded, isSignedIn, session, user, setActive]);
+  }, [isLoaded, isSignedIn, user?.id]);
 
 
   // --- EFFET DE CHARGEMENT DES DONNÉES ---
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    // On ne lance le fetch que si l'org est active
-    if (session?.lastActiveOrganizationId) {
-        fetchVins();
+    if (isOrgReady) {
+      fetchVins();
     }
-    
-    // Mise à jour compteur filtres
+  }, [isOrgReady, filters]);
+
+  // --- COMPTEUR DE FILTRES ACTIFS ---
+  useEffect(() => {
     let count = 0;
     if (filters.couleur) count++;
     if (filters.minPrix) count++;
     if (filters.maxPrix) count++;
     if (filters.region) count++;
     setActiveFiltersCount(count);
-  }, [filters, session?.lastActiveOrganizationId]); // On écoute le changement d'org
+  }, [filters]);
 
   // ... (Reste du code: filteredVins, renderItem, return...)
   const filteredVins = useMemo(() => {
