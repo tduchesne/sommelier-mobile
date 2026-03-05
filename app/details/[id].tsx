@@ -1,4 +1,5 @@
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth } from '@clerk/clerk-expo';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -61,6 +62,7 @@ export default function VinDetailsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = isDark ? ThemeColors.dark : ThemeColors.light;
+  const { getToken } = useAuth();
 
   const [vin, setVin] = useState<VinDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,7 +70,10 @@ export default function VinDetailsScreen() {
   useEffect(() => {
     const fetchVinDetails = async () => {
       try {
-        const response = await fetch(`${API_URL}/${id}`);
+        const token = await getToken({ template: 'default', skipCache: true });
+        const response = await fetch(`${API_URL}/${id}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
         if (response.ok) {
           const data = await response.json();
           setVin(data);
