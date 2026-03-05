@@ -1,31 +1,28 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { 
-  FlatList, 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  View, 
-  ActivityIndicator, 
-  useWindowDimensions,
-  Alert 
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { Vin } from '@/types/vin';
 import FilterModal, { FilterState } from '@/components/FilterModal';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@clerk/clerk-expo'; // Hook Clerk
+import type { Vin } from '@/types/vin';
+import { useAuth, useOrganizationList, useSession, useUser } from '@clerk/clerk-expo';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // --- CONSTANTES & THEME ---
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 if (!BASE_URL) throw new Error("EXPO_PUBLIC_API_URL manquante");
-const API_URL = `${BASE_URL.replace(/\/$/, '')}/vins`; // URL propre sans /search
+const API_URL = `${BASE_URL.replace(/\/$/, '')}/vins`;
 const TABLET_BREAKPOINT = 700;
-
-// ... (Garde tes constantes COLORS_VIN, getWineColor, ThemeColors et WineCardItem tels quels) ...
-// Copie-colle tes constantes ici pour garder ton design.
 
 const COLORS_VIN = {
   ROUGE: '#800020', BLANC: '#F2C94C', ROSE: '#F48FB1',
@@ -87,7 +84,10 @@ export default function HomeScreen() {
   const numColumns = isTablet ? 2 : 1;
 
   // --- SÉCURITÉ CLERK ---
-  const { getToken, signOut, isSignedIn } = useAuth(); 
+  const { getToken, signOut, isSignedIn, isLoaded } = useAuth(); 
+  const { user } = useUser();
+  const { session } = useSession();
+  const { setActive } = useOrganizationList();
 
   const [vins, setVins] = useState<Vin[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,9 +101,16 @@ export default function HomeScreen() {
   const fetchVins = useCallback(async () => {
     if (!isSignedIn) return; 
 
+    // Sécurité supplémentaire : si pas d'org active, on attend
+    if (!session?.lastActiveOrganizationId) {
+        console.log("⏳ Attente de l'activation de l'organisation...");
+        return;
+    }
+
     setLoading(true);
     try {
-      const token = await getToken();
+      // Force a fresh token so org_id is included after setActive
+      const token = await getToken({ skipCache: true });
 
       let url = API_URL;
       const params = new URLSearchParams();
@@ -121,13 +128,16 @@ export default function HomeScreen() {
           'Content-Type': 'application/json'
         }
       });
-
-      
       
       if (response.status === 401) {
         Alert.alert("Session expirée", "Veuillez vous reconnecter.");
         signOut();
         return;
+      }
+      // Gestion spécifique du 403 (Token valide mais pas le bon Resto/Org)
+      if (response.status === 403) {
+          console.error("403 Forbidden - Org ID manquant ou invalide");
+          throw new Error("Accès refusé au restaurant (Org ID invalide)");
       }
 
       if (!response.ok) throw new Error('Erreur réseau : ' + response.status);
@@ -137,23 +147,69 @@ export default function HomeScreen() {
 
     } catch (error) {
       console.log('Erreur fetch:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      Alert.alert("Erreur", errorMessage);
       setVins([]);
     } finally {
       setLoading(false);
     }
-  }, [filters, getToken, isSignedIn]);
+  }, [filters, getToken, isSignedIn, session?.lastActiveOrganizationId]); // Dépendance critique ajoutée
   
+  // --- EFFET DE GESTION DE SESSION (Correction Race Condition) ---
   useEffect(() => {
-    fetchVins();
+      async function handleSessionInit() {
+          if (!isLoaded || !isSignedIn || !user || !session) return;
+
+          // 1. Vérifier si une organisation est déjà active
+          if (session.lastActiveOrganizationId) {
+              // Tout est bon, on peut charger les données
+              // (Le fetch sera déclenché par l'autre useEffect ou manuellement, 
+              // mais ici on s'assure juste que l'état est sain)
+              return;
+          }
+
+          // 2. Si aucune organisation active, on l'active
+          if (user.organizationMemberships && user.organizationMemberships.length > 0) {
+              const targetOrgId = user.organizationMemberships[0].organization.id;
+              console.log("🔄 Activation forcée de l'organisation:", targetOrgId);
+              
+              try {
+                if (setActive) {
+                  await setActive({ organization: targetOrgId });
+                  // Une fois activé, Clerk va mettre à jour l'objet 'session'.
+                  // Cela déclenchera un re-render, et le fetchVins pourra passer.
+                }
+              } catch (err) {
+                  console.error("Erreur activation org:", err);
+                  Alert.alert("Erreur", "Impossible d'activer le restaurant.");
+              }
+          } else {
+              console.warn("Utilisateur sans organisation !");
+              Alert.alert("Attention", "Votre compte n'est lié à aucun restaurant.");
+          }
+      }
+
+      handleSessionInit();
+  }, [isLoaded, isSignedIn, session, user, setActive]);
+
+
+  // --- EFFET DE CHARGEMENT DES DONNÉES ---
+  useEffect(() => {
+    // On ne lance le fetch que si l'org est active
+    if (session?.lastActiveOrganizationId) {
+        fetchVins();
+    }
+    
+    // Mise à jour compteur filtres
     let count = 0;
     if (filters.couleur) count++;
     if (filters.minPrix) count++;
     if (filters.maxPrix) count++;
     if (filters.region) count++;
     setActiveFiltersCount(count);
-  }, [filters]); // Si on voulait filtrer côté serveur, on ajouterait searchText ici
+  }, [filters, session?.lastActiveOrganizationId]); // On écoute le changement d'org
 
-  // Filtrage local (inchangé)
+  // ... (Reste du code: filteredVins, renderItem, return...)
   const filteredVins = useMemo(() => {
     const searchLower = searchText.trim().toLowerCase();
     if (searchLower === '') return vins;
@@ -177,17 +233,14 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       
       <View style={[styles.headerContainer, { borderBottomColor: theme.border }]}>
-        {/* --- BOUTON DÉCONNEXION (Ajouté ici) --- */}
         <TouchableOpacity 
           onPress={() => signOut()} 
           style={{ position: 'absolute', right: 20, top: 20, zIndex: 10 }}
         >
           <MaterialIcons name="logout" size={24} color={theme.accent} />
         </TouchableOpacity>
-        {/* --------------------------------------- */}
         <Text style={[styles.title, { color: theme.accent }]}>CARTE DES VINS</Text>
         <Text style={[styles.subtitle, { color: theme.subText }]}>Que Sera Syrah</Text>
-
       </View>
       
       <View style={styles.toolbar}>
