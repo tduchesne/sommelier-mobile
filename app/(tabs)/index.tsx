@@ -1,31 +1,28 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { 
-  FlatList, 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  View, 
-  ActivityIndicator, 
-  useWindowDimensions,
-  Alert 
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import type { Vin } from '@/types/vin';
 import FilterModal, { FilterState } from '@/components/FilterModal';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@clerk/clerk-expo'; // Hook Clerk
+import type { Vin } from '@/types/vin';
+import { useAuth, useClerk, useOrganizationList, useSession, useUser } from '@clerk/clerk-expo';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // --- CONSTANTES & THEME ---
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 if (!BASE_URL) throw new Error("EXPO_PUBLIC_API_URL manquante");
-const API_URL = `${BASE_URL.replace(/\/$/, '')}/vins`; // URL propre sans /search
+const API_URL = `${BASE_URL.replace(/\/$/, '')}/vins`;
 const TABLET_BREAKPOINT = 700;
-
-// ... (Garde tes constantes COLORS_VIN, getWineColor, ThemeColors et WineCardItem tels quels) ...
-// Copie-colle tes constantes ici pour garder ton design.
 
 const COLORS_VIN = {
   ROUGE: '#800020', BLANC: '#F2C94C', ROSE: '#F48FB1',
@@ -87,7 +84,10 @@ export default function HomeScreen() {
   const numColumns = isTablet ? 2 : 1;
 
   // --- SÉCURITÉ CLERK ---
-  const { getToken, signOut, isSignedIn } = useAuth(); 
+  const { getToken, signOut, isSignedIn, isLoaded } = useAuth();
+  const { user } = useUser();
+  const { session } = useSession();
+  const clerk = useClerk();
 
   const [vins, setVins] = useState<Vin[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,15 +95,16 @@ export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [filters, setFilters] = useState<FilterState>({ couleur: null, minPrix: '', maxPrix: '', region: '' });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [isOrgReady, setIsOrgReady] = useState(false);
 
   const router = useRouter();
 
   const fetchVins = useCallback(async () => {
-    if (!isSignedIn) return; 
+    if (!isSignedIn || !isOrgReady) return;
 
     setLoading(true);
     try {
-      const token = await getToken();
+      const token = await getToken({ template: 'default', skipCache: true });
 
       let url = API_URL;
       const params = new URLSearchParams();
@@ -121,13 +122,16 @@ export default function HomeScreen() {
           'Content-Type': 'application/json'
         }
       });
-
-      
       
       if (response.status === 401) {
         Alert.alert("Session expirée", "Veuillez vous reconnecter.");
         signOut();
         return;
+      }
+      // Gestion spécifique du 403 (Token valide mais pas le bon Resto/Org)
+      if (response.status === 403) {
+          console.error("403 Forbidden - Org ID manquant ou invalide");
+          throw new Error("Accès refusé au restaurant (Org ID invalide)");
       }
 
       if (!response.ok) throw new Error('Erreur réseau : ' + response.status);
@@ -137,23 +141,57 @@ export default function HomeScreen() {
 
     } catch (error) {
       console.log('Erreur fetch:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      Alert.alert("Erreur", errorMessage);
       setVins([]);
     } finally {
       setLoading(false);
     }
-  }, [filters, getToken, isSignedIn]);
-  
+  }, [filters, getToken, isSignedIn, isOrgReady]);
+
+  // --- EFFET DE GESTION DE SESSION ---
   useEffect(() => {
-    fetchVins();
+      if (!isLoaded || !isSignedIn || !user || !session?.id) return;
+
+      async function handleSessionInit() {
+          if (user.organizationMemberships && user.organizationMemberships.length > 0) {
+              const targetOrgId = user.organizationMemberships[0].organization.id;
+              try {
+                await clerk.setActive({ session: session?.id, organization: targetOrgId });
+                setIsOrgReady(true);
+              } catch (err) {
+                  console.error("Erreur activation org:", err);
+                  Alert.alert("Erreur", "Impossible d'activer le restaurant.");
+              }
+          } else {
+              console.warn("Utilisateur sans organisation !");
+              Alert.alert("Attention", "Votre compte n'est lié à aucun restaurant.");
+          }
+      }
+
+      handleSessionInit();
+  }, [isLoaded, isSignedIn, user?.id, session?.id, clerk]);
+
+
+  // --- EFFET DE CHARGEMENT DES DONNÉES ---
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (isOrgReady) {
+      fetchVins();
+    }
+  }, [isOrgReady, filters]);
+
+  // --- COMPTEUR DE FILTRES ACTIFS ---
+  useEffect(() => {
     let count = 0;
     if (filters.couleur) count++;
     if (filters.minPrix) count++;
     if (filters.maxPrix) count++;
     if (filters.region) count++;
     setActiveFiltersCount(count);
-  }, [filters]); // Si on voulait filtrer côté serveur, on ajouterait searchText ici
+  }, [filters]);
 
-  // Filtrage local (inchangé)
+  // ... (Reste du code: filteredVins, renderItem, return...)
   const filteredVins = useMemo(() => {
     const searchLower = searchText.trim().toLowerCase();
     if (searchLower === '') return vins;
@@ -177,17 +215,14 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'left', 'right']}>
       
       <View style={[styles.headerContainer, { borderBottomColor: theme.border }]}>
-        {/* --- BOUTON DÉCONNEXION (Ajouté ici) --- */}
         <TouchableOpacity 
           onPress={() => signOut()} 
           style={{ position: 'absolute', right: 20, top: 20, zIndex: 10 }}
         >
           <MaterialIcons name="logout" size={24} color={theme.accent} />
         </TouchableOpacity>
-        {/* --------------------------------------- */}
         <Text style={[styles.title, { color: theme.accent }]}>CARTE DES VINS</Text>
         <Text style={[styles.subtitle, { color: theme.subText }]}>Que Sera Syrah</Text>
-
       </View>
       
       <View style={styles.toolbar}>
