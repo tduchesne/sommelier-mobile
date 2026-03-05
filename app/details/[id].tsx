@@ -62,15 +62,23 @@ export default function VinDetailsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = isDark ? ThemeColors.dark : ThemeColors.light;
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   const [vin, setVin] = useState<VinDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchVinDetails = async () => {
+      if (!isLoaded || !isSignedIn) {
+        setLoading(false);
+        return;
+      }
       try {
         const token = await getToken({ template: 'default', skipCache: true });
+        if (!token) {
+          setLoading(false);
+          return;
+        }
         const response = await fetch(`${API_URL}/${id}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
@@ -85,7 +93,7 @@ export default function VinDetailsScreen() {
       }
     };
     if (id) fetchVinDetails();
-  }, [id]);
+  }, [id, getToken, isLoaded, isSignedIn]);
 
   if (loading) {
     return (
