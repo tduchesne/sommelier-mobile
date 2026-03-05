@@ -151,7 +151,7 @@ export default function HomeScreen() {
 
   // --- EFFET DE GESTION DE SESSION ---
   useEffect(() => {
-      if (!isLoaded || !isSignedIn || !user || !session) return;
+      if (!isLoaded || !isSignedIn || !user || !session?.id) return;
 
       async function handleSessionInit() {
           if (user.organizationMemberships && user.organizationMemberships.length > 0) {
@@ -170,7 +170,7 @@ export default function HomeScreen() {
       }
 
       handleSessionInit();
-  }, [isLoaded, isSignedIn, user?.id]);
+  }, [isLoaded, isSignedIn, user?.id, session?.id, clerk]);
 
 
   // --- EFFET DE CHARGEMENT DES DONNÉES ---

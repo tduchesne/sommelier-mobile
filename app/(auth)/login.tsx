@@ -121,6 +121,10 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={() => setShowPassword(v => !v)}
               style={{ position: 'absolute', right: 15 }}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              accessibilityState={{ selected: showPassword }}
             >
               <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color={placeholderColor} />
             </TouchableOpacity>
